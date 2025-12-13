@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Smart Farming - Plant Health Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+            background-image: url('https://images.unsplash.com/photo-1530836369250-ef72085cd2f8?auto=format&fit=crop&w=1920&q=80');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: #00ffcc;
+            box-shadow: 0 0 10px #00ffcc;
+            animation: scan 2s infinite linear;
+            z-index: 10;
+            display: none; /* Hidden by default, shown when scanning */
+        }
+        .scan-line.active {
+            display: block;
+        }
+        @keyframes scan {
+            0% { top: 0; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+        .analysis-box {
+            position: absolute;
+            border: 2px solid #ef4444;
+            background-color: rgba(239, 68, 68, 0.2);
+            width: 40%;
+            height: 40%;
+            top: 30%;
+            left: 30%;
+            border-radius: 8px;
+            animation: pulse 2s infinite;
+            opacity: 0; /* Hidden initially */
+            transition: opacity 0.5s ease;
+            z-index: 5;
+        }
+        .analysis-box.show {
+            opacity: 1;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #10b981;
+            border-radius: 10px;
+        }
+        /* Flash Animation */
+        @keyframes cameraFlash {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        .flash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            z-index: 50;
+            pointer-events: none;
+            opacity: 0;
+        }
+        .flash.active {
+            animation: cameraFlash 0.5s ease-out;
+        }
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(255,255,255,0.8);
+            z-index: 20;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .loading-overlay.show {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        /* Toggle Switch */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #10b981;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #10b981;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen py-10 px-4 bg-black/40">
+
+    <!-- Mobile Device Container -->
+    <div class="relative w-full max-w-sm bg-slate-50 rounded-[3rem] shadow-2xl overflow-hidden border-[8px] border-slate-900 h-[850px] flex flex-col">
+        
+        <!-- Status Bar Mockup -->
+        <div class="h-6 w-full bg-slate-900 flex justify-between items-center px-6 pt-2">
+            <span class="text-white text-xs">09:41</span>
+            <div class="flex space-x-1">
+                <div class="w-3 h-3 bg-white rounded-full opacity-80"></div>
+                <div class="w-3 h-3 bg-white rounded-full opacity-80"></div>
+                <div class="w-3 h-3 bg-white rounded-full"></div>
+            </div>
+        </div>
+
+        <!-- App Header -->
+        <header class="bg-white/80 backdrop-blur-md sticky top-0 z-20 px-6 py-3 flex justify-between items-center shadow-sm">
+            <div class="flex items-center gap-2">
+                <!-- Logo Image from user request -->
+                <img src="https://i.postimg.cc/bwDSm7zp/Smartfarm-Logo5.png" alt="Smart Farm DIY" class="h-16 w-auto object-contain">
+            </div>
+            <button class="text-slate-500 hover:text-emerald-600"><i class="fa-solid fa-bars text-xl"></i></button>
+        </header>
+
+        <!-- Main Scrollable Content -->
+        <main class="flex-1 overflow-y-auto pb-24 relative" id="mainContent">
+            
+            <!-- 1. Image Scan Section -->
+            <div class="relative h-64 w-full bg-slate-200 overflow-hidden group">
+                <!-- Camera Flash Effect -->
+                <div id="cameraFlash" class="flash"></div>
+
+                <!-- Plant Image: Added crossorigin for canvas processing -->
+                <img id="plantImage" crossorigin="anonymous" src="https://images.unsplash.com/photo-1591965825226-5b77c3558c79?auto=format&fit=crop&w=800&q=80" 
+                     alt="Plant Leaf" class="w-full h-full object-cover transition-transform duration-700 relative z-0">
+                
+                <!-- Heatmap Canvas Layer (New) -->
+                <canvas id="heatmapCanvas" class="absolute inset-0 w-full h-full z-[1] opacity-0 transition-opacity duration-700 pointer-events-none mix-blend-overlay"></canvas>
+                
+                <!-- Segmentation Canvas Layer -->
+                <canvas id="segmentationCanvas" class="absolute inset-0 w-full h-full z-[2] opacity-0 transition-opacity duration-700 pointer-events-none"></canvas>
+
+                <!-- Scanning Overlay UI -->
+                <div id="scanLine" class="scan-line active"></div>
+                <div id="analysisBox" class="analysis-box hidden"></div>
+                
+                <!-- Segmentation Legend (Shows only when active) -->
+                <div id="segLegend" class="absolute top-4 right-4 z-10 hidden flex flex-col gap-2 items-end">
+                    <div id="segBadge" class="bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2 border border-white/20 hidden">
+                        <div class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></div>
+                        <span class="text-[10px] text-white font-medium">Diseased Area</span>
+                    </div>
+                    <!-- Heatmap Legend Gradient -->
+                    <div id="heatBadge" class="bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2 border border-white/20 hidden">
+                        <div class="w-12 h-2.5 rounded-full bg-gradient-to-r from-blue-500 via-yellow-400 to-red-500"></div>
+                        <span class="text-[10px] text-white font-medium">AI Attention</span>
+                    </div>
+                </div>
+
+                <!-- Tagline Overlay -->
+                <div class="absolute bottom-0 w-full bg-gradient-to-t from-black/70 to-transparent p-4 pt-10 z-10">
+                    <p id="statusText" class="text-white text-xs text-center font-light tracking-wide opacity-90">
+                        ถ่ายภาพใบพืช <i class="fa-solid fa-arrow-right mx-1 text-[10px]"></i> วิเคราะห์อัตโนมัติ <i class="fa-solid fa-arrow-right mx-1 text-[10px]"></i> รู้ผลทันที
+                    </p>
+                </div>
+            </div>
+
+            <div class="px-5 -mt-6 relative z-10">
+                
+                <!-- Loading State -->
+                <div id="loadingState" class="hidden bg-white rounded-2xl shadow-lg p-8 mb-4 border border-slate-100 text-center">
+                    <div class="animate-spin w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                    <p class="text-slate-500 text-sm">กำลังประมวลผล Segmentation & Heatmap...</p>
+                    <p class="text-slate-400 text-xs mt-1">Analyzing Leaf Tissue...</p>
+                </div>
+
+                <!-- Control Bar for Segmentation & Heatmap -->
+                <div id="controlBar" class="bg-white rounded-xl shadow-sm p-4 mb-4 border border-slate-100 hidden transition-all duration-300">
+                    
+                    <!-- Row 1: Segmentation -->
+                    <div class="flex items-center justify-between mb-3 pb-3 border-b border-slate-50">
+                        <div class="flex items-center gap-2 text-slate-700">
+                            <i class="fa-solid fa-layer-group text-emerald-500"></i>
+                            <span class="text-xs font-semibold">พื้นที่เกิดโรค (Segment)</span>
+                            <span id="spotCountBadge" class="text-[10px] bg-red-100 text-red-500 px-2 py-0.5 rounded-full font-bold ml-1 hidden">
+                                <i class="fa-solid fa-virus text-[8px] mr-1"></i><span id="spotCountValue">0</span> จุด
+                            </span>
+                        </div>
+                        <div class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" name="toggle" id="segToggle" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300 right-5 checked:right-0 checked:border-emerald-500 transition-all duration-300" checked/>
+                            <label for="segToggle" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer checked:bg-emerald-500 transition-colors duration-300"></label>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Heatmap (New) -->
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2 text-slate-700">
+                            <i class="fa-solid fa-fire-flame-curved text-orange-500"></i>
+                            <span class="text-xs font-semibold">AI Heatmap (Score-CAM)</span>
+                        </div>
+                        <div class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" name="toggle" id="heatToggle" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300 right-5 checked:right-0 checked:border-orange-500 transition-all duration-300"/>
+                            <label for="heatToggle" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer checked:bg-orange-500 transition-colors duration-300"></label>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- 3. Analysis Results Card -->
+                <div id="resultsCard" class="bg-white rounded-2xl shadow-lg p-5 mb-4 border border-slate-100 transition-all duration-500">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-square-poll-vertical text-emerald-500"></i> ผลการวิเคราะห์
+                        </h2>
+                        <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded-full">AI Confidence 98.5%</span>
+                    </div>
+
+                    <!-- Deficiencies List -->
+                    <div class="space-y-5">
+                        <!-- Nitrogen -->
+                        <div>
+                            <div class="flex justify-between text-sm mb-1 items-end">
+                                <span class="font-medium text-slate-700 flex items-center gap-1">
+                                    <span class="w-2 h-2 rounded-full bg-red-500"></span> ขาดไนโตรเจน (N)
+                                </span>
+                                <div class="text-right">
+                                    <span id="valN" class="font-bold text-lg text-slate-800">85%</span>
+                                    <span id="lvlN" class="text-[10px] text-red-500 font-bold bg-red-50 px-1.5 py-0.5 rounded ml-1">วิกฤต</span>
+                                </div>
+                            </div>
+                            <div class="w-full bg-slate-100 rounded-full h-2 mb-2">
+                                <div id="barN" class="bg-red-500 h-2 rounded-full transition-all duration-1000 relative" style="width: 85%"></div>
+                            </div>
+                            <p id="descN" class="text-xs text-slate-500 font-light pl-3 border-l-2 border-red-200">
+                                ใบแก่เริ่มเหลืองจากปลายใบ ลุกลามสู่โคนใบ พืชชะงักการเติบโต
+                            </p>
+                        </div>
+
+                        <!-- Potassium -->
+                        <div>
+                            <div class="flex justify-between text-sm mb-1 items-end">
+                                <span class="font-medium text-slate-700 flex items-center gap-1">
+                                    <span class="w-2 h-2 rounded-full bg-orange-400"></span> ขาดโพแทสเซียม (K)
+                                </span>
+                                <div class="text-right">
+                                    <span id="valK" class="font-bold text-lg text-slate-800">45%</span>
+                                    <span id="lvlK" class="text-[10px] text-orange-500 font-bold bg-orange-50 px-1.5 py-0.5 rounded ml-1">ปานกลาง</span>
+                                </div>
+                            </div>
+                            <div class="w-full bg-slate-100 rounded-full h-2 mb-2">
+                                <div id="barK" class="bg-orange-400 h-2 rounded-full transition-all duration-1000" style="width: 45%"></div>
+                            </div>
+                            <p id="descK" class="text-xs text-slate-500 font-light pl-3 border-l-2 border-orange-200">
+                                ขอบใบไหม้เป็นจุดสีน้ำตาล ใบม้วนงอ ลำต้นไม่แข็งแรง
+                            </p>
+                        </div>
+
+                        <!-- Magnesium -->
+                        <div>
+                            <div class="flex justify-between text-sm mb-1 items-end">
+                                <span class="font-medium text-slate-700 flex items-center gap-1">
+                                    <span class="w-2 h-2 rounded-full bg-yellow-400"></span> ขาดแมกนีเซียม (Mg)
+                                </span>
+                                <div class="text-right">
+                                    <span id="valMg" class="font-bold text-lg text-slate-800">20%</span>
+                                    <span id="lvlMg" class="text-[10px] text-yellow-600 font-bold bg-yellow-50 px-1.5 py-0.5 rounded ml-1">ต่ำ</span>
+                                </div>
+                            </div>
+                            <div class="w-full bg-slate-100 rounded-full h-2 mb-2">
+                                <div id="barMg" class="bg-yellow-400 h-2 rounded-full transition-all duration-1000" style="width: 20%"></div>
+                            </div>
+                             <p id="descMg" class="text-xs text-slate-500 font-light pl-3 border-l-2 border-yellow-200">
+                                เนื้อใบเหลืองแต่เส้นใบยังเขียว พบในใบแก่ก่อนใบอ่อน
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. AI Recommendation Box -->
+                <div id="recommendationBox" class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-lg p-5 mb-4 text-white relative overflow-hidden transition-all duration-500 delay-100">
+                    <div class="absolute -right-4 -top-4 text-white/10 text-8xl">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <h3 class="font-bold flex items-center gap-2 mb-3 relative z-10">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> คำแนะนำอัจฉริยะ
+                    </h3>
+                    <ul id="recommendationList" class="text-sm space-y-2 relative z-10 font-light">
+                        <!-- Content will be injected by JS -->
+                        <li class="flex items-start gap-2">
+                            <i class="fa-regular fa-check-circle mt-1"></i>
+                            <span>กำลังประมวลผลคำแนะนำ...</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 5. Graphs & Stats -->
+                <div id="statsGrid" class="grid grid-cols-2 gap-3 mb-6 transition-all duration-500 delay-200">
+                    <!-- Risk Graph -->
+                    <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex flex-col items-center">
+                        <span class="text-xs text-slate-500 mb-2">ความเสี่ยงใบแห้ง</span>
+                        <div class="relative w-16 h-16">
+                            <svg class="w-full h-full transform -rotate-90">
+                                <circle cx="32" cy="32" r="28" stroke="#f1f5f9" stroke-width="6" fill="transparent" />
+                                <circle id="circleRisk" cx="32" cy="32" r="28" stroke="#ef4444" stroke-width="6" fill="transparent" 
+                                        stroke-dasharray="175.9" stroke-dashoffset="52" stroke-linecap="round" class="transition-all duration-1000" />
+                            </svg>
+                            <span class="absolute inset-0 flex items-center justify-center text-sm font-bold text-slate-700" id="textRisk">70%</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Yield Quality -->
+                    <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex flex-col items-center">
+                        <span class="text-xs text-slate-500 mb-2">คุณภาพผลผลิต</span>
+                        <div class="relative w-16 h-16">
+                            <svg class="w-full h-full transform -rotate-90">
+                                <circle cx="32" cy="32" r="28" stroke="#f1f5f9" stroke-width="6" fill="transparent" />
+                                <circle id="circleYield" cx="32" cy="32" r="28" stroke="#10b981" stroke-width="6" fill="transparent" 
+                                        stroke-dasharray="175.9" stroke-dashoffset="35" stroke-linecap="round" class="transition-all duration-1000" />
+                            </svg>
+                            <span class="absolute inset-0 flex items-center justify-center text-sm font-bold text-slate-700" id="textYield">80%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tagline Box -->
+                <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 text-center mb-20">
+                    <p class="text-blue-600 text-xs font-medium">
+                        <i class="fa-solid fa-seedling mr-1"></i> ลดความสูญเสีย เพิ่มผลผลิตคุณภาพสูงด้วย AI
+                    </p>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- Hidden File Input -->
+        <input type="file" id="fileInput" accept="image/*" class="hidden">
+
+        <!-- 1. Footer Buttons -->
+        <div class="absolute bottom-0 w-full bg-white border-t border-slate-100 p-4 pb-8 z-30 shadow-[0_-5px_20px_rgba(0,0,0,0.05)] rounded-b-[2.5rem]">
+            <div class="flex gap-3">
+                <button id="uploadBtn" class="flex-1 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 py-3 rounded-xl font-medium transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-image"></i> อัปโหลดรูป
+                </button>
+                <button id="cameraBtn" class="flex-[1.5] bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-emerald-200 hover:shadow-xl hover:scale-[1.02] active:scale-95 transition transform flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-camera"></i> ถ่ายภาพใบพืช
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // DOM Elements
+        const uploadBtn = document.getElementById('uploadBtn');
+        const cameraBtn = document.getElementById('cameraBtn');
+        const fileInput = document.getElementById('fileInput');
+        const plantImage = document.getElementById('plantImage');
+        const scanLine = document.getElementById('scanLine');
+        const analysisBox = document.getElementById('analysisBox');
+        const resultsCard = document.getElementById('resultsCard');
+        const recommendationBox = document.getElementById('recommendationBox');
+        const statsGrid = document.getElementById('statsGrid');
+        const loadingState = document.getElementById('loadingState');
+        const statusText = document.getElementById('statusText');
+        const cameraFlash = document.getElementById('cameraFlash');
+        
+        // Canvas Elements
+        const segmentationCanvas = document.getElementById('segmentationCanvas');
+        const heatmapCanvas = document.getElementById('heatmapCanvas');
+        
+        // Controls
+        const segToggle = document.getElementById('segToggle');
+        const heatToggle = document.getElementById('heatToggle');
+        const controlBar = document.getElementById('controlBar');
+        const segLegend = document.getElementById('segLegend');
+        const segBadge = document.getElementById('segBadge');
+        const heatBadge = document.getElementById('heatBadge');
+        
+        const spotCountBadge = document.getElementById('spotCountBadge');
+        const spotCountValue = document.getElementById('spotCountValue');
+        
+        // Bars
+        const barN = document.getElementById('barN');
+        const barK = document.getElementById('barK');
+        const barMg = document.getElementById('barMg');
+        
+        // Text Values
+        const valN = document.getElementById('valN');
+        const valK = document.getElementById('valK');
+        const valMg = document.getElementById('valMg');
+        const lvlN = document.getElementById('lvlN');
+        const lvlK = document.getElementById('lvlK');
+        const lvlMg = document.getElementById('lvlMg');
+        const descN = document.getElementById('descN');
+        const descK = document.getElementById('descK');
+        const descMg = document.getElementById('descMg');
+
+        // Circular Charts
+        const circleRisk = document.getElementById('circleRisk');
+        const circleYield = document.getElementById('circleYield');
+        const textRisk = document.getElementById('textRisk');
+        const textYield = document.getElementById('textYield');
+
+        // Sample Images
+        const sampleImages = [
+            "https://images.unsplash.com/photo-1591965825226-5b77c3558c79?auto=format&fit=crop&w=800&q=80",
+            "https://plus.unsplash.com/premium_photo-1664302152996-334e4fb65cc2?q=80&w=800&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1520412099551-62b6bafeb5bb?q=80&w=800&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1628676675574-7d2d14cb3593?q=80&w=800&auto=format&fit=crop"
+        ];
+
+        // Descriptions Library
+        const descriptions = {
+            N: [
+                "ใบมีสีเหลืองซีดทั่วทั้งใบ การเจริญเติบโตชะงัก ลำต้นผอมสูง",
+                "ใบแก่เริ่มเหลืองจากปลายใบ ลุกลามสู่โคนใบ พืชชะงักการเติบโต",
+                "สีเขียวของใบจางลงอย่างเห็นได้ชัด ผลผลิตมีขนาดเล็ก"
+            ],
+            K: [
+                "ขอบใบไหม้เป็นจุดสีน้ำตาล ใบม้วนงอ ลำต้นไม่แข็งแรง",
+                "ปลายใบและขอบใบแห้งไหม้ ผลสุกไม่สม่ำเสมอ รสชาติไม่ดี",
+                "ใบจุดสีน้ำตาลไหม้ รากเน่าได้ง่าย ความต้านทานโรคลดลง"
+            ],
+            Mg: [
+                "เนื้อใบเหลืองแต่เส้นใบยังเขียว พบในใบแก่ก่อนใบอ่อน",
+                "เกิดจุดเหลืองระหว่างเส้นใบ ใบร่วงหล่นง่ายกว่าปกติ",
+                "ขอบใบม้วนขึ้นเล็กน้อย เส้นใบเขียวเข้ม เนื้อใบซีดจาง"
+            ]
+        };
+
+        // Detailed Recommendations Library
+        const detailedRecommendations = {
+            N: [
+                "<strong>แก้ไขเร่งด่วน:</strong> ฉีดพ่นปุ๋ยทางใบสูตร 46-0-0 (ยูเรีย) อัตรา 20 กรัม/น้ำ 20 ลิตร",
+                "<strong>ระยะยาว:</strong> เติมปุ๋ยคอกหรือปุ๋ยหมักเพื่อเพิ่มอินทรียวัตถุในดิน",
+                "<strong>ข้อควรระวัง:</strong> ตรวจสอบระบบราก หากรากเน่าพืชจะดูดซึม N ไม่ได้"
+            ],
+            K: [
+                "<strong>แก้ไขเร่งด่วน:</strong> ให้ปุ๋ยทางใบสูตร 13-0-46 หรือเติมปุ๋ย 0-0-60 ลงดิน",
+                "<strong>การจัดการน้ำ:</strong> ควบคุมความชื้นในดินไม่ให้แฉะเกินไป เพื่อช่วยการดูดซึม",
+                "<strong>ระยะผลผลิต:</strong> ช่วงติดผลควรเพิ่ม K เพื่อความหวานและคุณภาพผล"
+            ],
+            Mg: [
+                "<strong>แก้ไขเร่งด่วน:</strong> ฉีดพ่นแมกนีเซียมซัลเฟต (ดีเกลือ) 1 ช้อนโต๊ะ/น้ำ 20 ลิตร",
+                "<strong>ปรับสภาพดิน:</strong> ตรวจค่า pH หากเป็นกรด (<5.0) ให้เติมโดโลไมท์",
+                "<strong>สาเหตุแทรกซ้อน:</strong> ลดปุ๋ยโพแทสเซียม (K) ชั่วคราว เพราะอาจยับยั้งการรับ Mg"
+            ]
+        };
+
+        // Stores locations of detected spots for heatmap generation
+        let detectedSpots = [];
+
+        // 1. Upload Button
+        uploadBtn.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    plantImage.src = e.target.result;
+                    startAnalysisProcess();
+                }
+                reader.readAsDataURL(e.target.files[0]);
+            }
+        });
+
+        // 2. Camera Button
+        cameraBtn.addEventListener('click', () => {
+            cameraFlash.classList.remove('active');
+            void cameraFlash.offsetWidth;
+            cameraFlash.classList.add('active');
+
+            const randomImg = sampleImages[Math.floor(Math.random() * sampleImages.length)];
+            plantImage.src = randomImg;
+            if (plantImage.complete) {
+                startAnalysisProcess();
+            } else {
+                plantImage.onload = startAnalysisProcess;
+            }
+        });
+
+        // 3. Toggle Logic
+        segToggle.addEventListener('change', updateVisualizations);
+        heatToggle.addEventListener('change', updateVisualizations);
+
+        function updateVisualizations() {
+            // Segmentation
+            if(segToggle.checked) {
+                segmentationCanvas.classList.remove('opacity-0');
+                segBadge.classList.remove('hidden');
+                segLegend.classList.remove('hidden');
+            } else {
+                segmentationCanvas.classList.add('opacity-0');
+                segBadge.classList.add('hidden');
+            }
+
+            // Heatmap
+            if(heatToggle.checked) {
+                heatmapCanvas.classList.remove('opacity-0');
+                heatBadge.classList.remove('hidden');
+                segLegend.classList.remove('hidden');
+                drawHeatmap(); // Redraw to ensure correct sizing/state
+            } else {
+                heatmapCanvas.classList.add('opacity-0');
+                heatBadge.classList.add('hidden');
+            }
+
+            // Hide main legend container if both are hidden
+            if (!segToggle.checked && !heatToggle.checked) {
+                segLegend.classList.add('hidden');
+            }
+        }
+
+        function startAnalysisProcess() {
+            // Reset UI
+            scanLine.classList.add('active');
+            
+            // Hide results
+            analysisBox.classList.remove('show');
+            resultsCard.classList.add('hidden');
+            recommendationBox.classList.add('hidden');
+            statsGrid.classList.add('hidden');
+            controlBar.classList.add('hidden');
+            
+            // Hide layers initially
+            segmentationCanvas.classList.add('opacity-0');
+            heatmapCanvas.classList.add('opacity-0');
+            segLegend.classList.add('hidden');
+            spotCountBadge.classList.add('hidden');
+            
+            // Clear canvases
+            const ctxSeg = segmentationCanvas.getContext('2d');
+            ctxSeg.clearRect(0, 0, segmentationCanvas.width, segmentationCanvas.height);
+            const ctxHeat = heatmapCanvas.getContext('2d');
+            ctxHeat.clearRect(0, 0, heatmapCanvas.width, heatmapCanvas.height);
+
+            detectedSpots = []; // Clear spots
+
+            loadingState.classList.remove('hidden');
+            statusText.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> กำลังวิเคราะห์สุขภาพพืช...';
+
+            // Reset Bars
+            barN.style.width = '0%';
+            barK.style.width = '0%';
+            barMg.style.width = '0%';
+            
+            setTimeout(() => {
+                finishAnalysis();
+            }, 1500);
+        }
+
+        // --- CORE ANALYSIS & VISUALIZATION ---
+
+        function drawSegmentation() {
+            // Sync canvas size
+            segmentationCanvas.width = segmentationCanvas.offsetWidth;
+            segmentationCanvas.height = segmentationCanvas.offsetHeight;
+            heatmapCanvas.width = heatmapCanvas.offsetWidth;
+            heatmapCanvas.height = heatmapCanvas.offsetHeight;
+
+            const ctx = segmentationCanvas.getContext('2d');
+            const w = segmentationCanvas.width;
+            const h = segmentationCanvas.height;
+
+            ctx.clearRect(0, 0, w, h);
+            detectedSpots = []; // Reset storage
+            
+            let spotCount = 0;
+
+            try {
+                // Read image data
+                ctx.drawImage(plantImage, 0, 0, w, h);
+                const frame = ctx.getImageData(0, 0, w, h);
+                const data = frame.data;
+                ctx.clearRect(0, 0, w, h); // Clear image, leave only mask
+                
+                ctx.fillStyle = 'rgba(239, 68, 68, 0.75)'; // Red Mask
+
+                let diseasePixelCount = 0;
+                const step = 5; // Optimization
+
+                for (let y = 0; y < h; y += step) {
+                    for (let x = 0; x < w; x += step) {
+                        const index = (y * w + x) * 4;
+                        const r = data[index];
+                        const g = data[index + 1];
+                        const b = data[index + 2];
+                        
+                        // Simple detection heuristics
+                        const maxVal = Math.max(r, g, b);
+                        const minVal = Math.min(r, g, b);
+                        const isGrayscale = (maxVal - minVal) < 25;
+                        const isVeryDark = maxVal < 40;
+                        const isBlueSky = (b > g && b > r);
+                        
+                        if (isGrayscale || isVeryDark || isBlueSky) continue;
+
+                        const isGreen = (g > r + 15) && (g > b + 5);
+                        
+                        if (!isGreen && r > 50) {
+                             // Draw Spot
+                             ctx.beginPath();
+                             ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+                             ctx.fill();
+                             diseasePixelCount++;
+                             
+                             // Store significant spots for heatmap (sub-sampling)
+                             if (Math.random() > 0.8) { 
+                                 detectedSpots.push({x, y});
+                             }
+                        }
+                    }
+                }
+                
+                spotCount = Math.max(0, Math.floor(diseasePixelCount / 20));
+
+            } catch (e) {
+                console.error("Canvas Security Error (CORS):", e);
+                spotCount = fallbackRandomSpots(ctx, w, h);
+            }
+
+            return spotCount;
+        }
+
+        function fallbackRandomSpots(ctx, w, h) {
+             ctx.fillStyle = 'rgba(239, 68, 68, 0.55)';
+             const numSpots = Math.floor(Math.random() * 30) + 20; 
+             for(let i=0; i<numSpots; i++) {
+                const cx = w * 0.1 + Math.random() * (w * 0.8);
+                const cy = h * 0.1 + Math.random() * (h * 0.8);
+                const size = 5 + Math.random() * 15; 
+                ctx.beginPath();
+                ctx.arc(cx, cy, size, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Store for heatmap fallback
+                detectedSpots.push({x: cx, y: cy});
+            }
+            return numSpots;
+        }
+
+        function drawHeatmap() {
+            // Uses detectedSpots to generate a Score-CAM style heatmap
+            // Colors: Blue (Cold/Background) -> Yellow -> Red (Hot/Attention)
+            
+            const ctx = heatmapCanvas.getContext('2d');
+            const w = heatmapCanvas.width;
+            const h = heatmapCanvas.height;
+            
+            ctx.clearRect(0, 0, w, h);
+
+            if (detectedSpots.length === 0) return;
+
+            // 1. Draw base "Cold" layer (Low probability)
+            // ctx.fillStyle = 'rgba(0, 0, 255, 0.1)';
+            // ctx.fillRect(0,0, w, h);
+
+            // 2. Draw "Hot" spots using gradients
+            // Use 'screen' or 'lighter' to accumulate heat
+            ctx.globalCompositeOperation = 'screen'; 
+
+            detectedSpots.forEach(spot => {
+                const radius = 30 + Math.random() * 20;
+                const gradient = ctx.createRadialGradient(spot.x, spot.y, 0, spot.x, spot.y, radius);
+                
+                // Score-CAM Spectrum
+                gradient.addColorStop(0, 'rgba(255, 0, 0, 0.8)');    // Center: Red (High Score)
+                gradient.addColorStop(0.4, 'rgba(255, 255, 0, 0.5)'); // Mid: Yellow
+                gradient.addColorStop(0.7, 'rgba(0, 255, 255, 0.3)'); // Outer: Cyan
+                gradient.addColorStop(1, 'rgba(0, 0, 255, 0)');      // Edge: Transparent Blue
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(spot.x, spot.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.globalCompositeOperation = 'source-over'; // Reset
+        }
+
+        function getLevelInfo(percentage) {
+            if (percentage >= 70) return { text: "วิกฤต", class: "text-red-500 bg-red-50" };
+            if (percentage >= 40) return { text: "ปานกลาง", class: "text-orange-500 bg-orange-50" };
+            return { text: "ต่ำ", class: "text-yellow-600 bg-yellow-50" };
+        }
+
+        function finishAnalysis() {
+            loadingState.classList.add('hidden');
+            resultsCard.classList.remove('hidden');
+            recommendationBox.classList.remove('hidden');
+            statsGrid.classList.remove('hidden');
+            controlBar.classList.remove('hidden'); 
+            
+            statusText.innerHTML = '<i class="fa-solid fa-check-circle text-emerald-400"></i> วิเคราะห์เสร็จสิ้น';
+
+            // --- GENERATE DATA ---
+            const nValData = Math.floor(Math.random() * 50) + 40; //แก้ไขฟังชั่นนี้ที่ใช้งานจริง 
+            const kValData = Math.floor(Math.random() * 50) + 30; //แก้ไขฟังชั่นนี้ที่ใช้งานจริง
+            const mgValData = Math.floor(Math.random() * 40) + 10; //แก้ไขฟังชั่นนี้ที่ใช้งานจริง
+            const riskData = Math.floor(Math.random() * 30) + 60;  //แก้ไขฟังชั่นนี้ที่ใช้งานจริง
+            const yieldData = Math.floor(Math.random() * 20) + 70; //แก้ไขฟังชั่นนี้ที่ใช้งานจริง
+
+            // Find dominant
+            let dominantType = 'Mg';
+            let maxVal = mgValData;
+            if (nValData > maxVal) { maxVal = nValData; dominantType = 'N'; }
+            if (kValData > maxVal) { maxVal = kValData; dominantType = 'K'; }
+
+            // 1. Perform detection (populates detectedSpots)
+            const spotCount = drawSegmentation();
+            
+            // 2. Update Spot UI
+            spotCountValue.innerText = spotCount > 0 ? spotCount : "ตรวจไม่พบ";
+            spotCountBadge.classList.remove('hidden');
+
+            // 3. Update Visualizations based on toggles
+            updateVisualizations();
+
+            // Update UI Texts
+            const nInfo = getLevelInfo(nValData);
+            valN.innerText = `${nValData}%`;
+            lvlN.innerText = nInfo.text;
+            lvlN.className = `text-[10px] font-bold px-1.5 py-0.5 rounded ml-1 ${nInfo.class}`;
+            descN.innerText = descriptions.N[Math.floor(Math.random() * 3)];
+            
+            const kInfo = getLevelInfo(kValData);
+            valK.innerText = `${kValData}%`;
+            lvlK.innerText = kInfo.text;
+            lvlK.className = `text-[10px] font-bold px-1.5 py-0.5 rounded ml-1 ${kInfo.class}`;
+            descK.innerText = descriptions.K[Math.floor(Math.random() * 3)];
+
+            const mgInfo = getLevelInfo(mgValData);
+            valMg.innerText = `${mgValData}%`;
+            lvlMg.innerText = mgInfo.text;
+            lvlMg.className = `text-[10px] font-bold px-1.5 py-0.5 rounded ml-1 ${mgInfo.class}`;
+            descMg.innerText = descriptions.Mg[Math.floor(Math.random() * 3)];
+
+            // Recommendations
+            const recList = document.getElementById('recommendationList');
+            const recs = detailedRecommendations[dominantType];
+            recList.innerHTML = recs.map(rec => `
+                <li class="flex items-start gap-2">
+                    <i class="fa-regular fa-lightbulb mt-1 text-yellow-300"></i>
+                    <span>${rec}</span>
+                </li>
+            `).join('');
+
+            // Animate Bars
+            setTimeout(() => {
+                barN.style.width = `${nValData}%`;
+                barK.style.width = `${kValData}%`;
+                barMg.style.width = `${mgValData}%`;
+            }, 100);
+
+            // Circular Graphs
+            const circumference = 2 * Math.PI * 28; 
+            const riskOffset = circumference - (riskData / 100) * circumference;
+            const yieldOffset = circumference - (yieldData / 100) * circumference;
+
+            circleRisk.style.strokeDashoffset = riskOffset;
+            textRisk.innerText = `${riskData}%`;
+            circleYield.style.strokeDashoffset = yieldOffset;
+            textYield.innerText = `${yieldData}%`;
+        }
+    </script>
+</body>
+</html>
