@@ -45,6 +45,8 @@ Color Filtering:
 
 ![598116583_833121599595798_8323540847400934910_n](https://github.com/user-attachments/assets/70a5ed5e-67cf-4d3b-8b34-7ce7e40e662a)
 
+#Segmentation Mask ให้วาดเฉพาะจุด (Spots) ตามที่คุณต้องการ และเพิ่มฟีเจอร์ "นับจำนวนจุดโรคพืช" (Spot Counter) เพื่อแสดงข้อมูลเชิงปริมาณให้เกษตรกรทราบว่ามีความรุนแรงแค่ไหน
+
 ![598076054_833121636262461_8087768675798350586_n](https://github.com/user-attachments/assets/57bcf99a-4d8d-4431-a811-3a45f02a7da6)
 ![598119778_833121696262455_316918071568139412_n](https://github.com/user-attachments/assets/dea6d344-8e9a-4f8d-9ef1-957e39661456)
 ![600361135_833121726262452_8208701928418403466_n](https://github.com/user-attachments/assets/badb9d5d-de62-4f63-9c6f-5acdb08447d5)
